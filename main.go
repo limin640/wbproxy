@@ -5,6 +5,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -441,12 +442,12 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	flag.StringVar(&gateKey, "key", os.Getenv("GATE_KEY"), "API 门禁密钥（-key 或 GATE_KEY 环境变量；为空则不鉴权，仅建议本机使用）")
+	// zbpack 的 /bin/server 占用了 -key/-listen 等常见 flag 名，这里用带前缀的名字避免冲突
 	defaultAuth := os.Getenv("HOME") + "/Library/Application Support/CodeBuddyExtension/Data/Public/auth/workbuddy-desktop-ai.info"
-	flag.StringVar(&authPath, "auth", defaultAuth, "登录态 auth info 文件路径")
-	flag.StringVar(&upstream, "upstream", "https://www.workbuddy.ai", "上游地址")
-	flag.StringVar(&gateKey, "key", "", "API 门禁密钥（为空则不鉴权，仅建议本机使用）")
-	flag.StringVar(&listenAddr, "listen", ":8080", "监听地址")
+	flag.StringVar(&gateKey, "wb-gate", os.Getenv("GATE_KEY"), "API 门禁密钥（-wb-gate 或 GATE_KEY 环境变量；为空则不鉴权）")
+	flag.StringVar(&authPath, "wb-auth", defaultAuth, "登录态 auth info 文件路径")
+	flag.StringVar(&upstream, "wb-upstream", "https://www.workbuddy.ai", "上游地址")
+	flag.StringVar(&listenAddr, "wb-listen", ":"+cmp.Or(os.Getenv("PORT"), "8080"), "监听地址")
 	flag.Parse()
 
 	if err := loadAuth(); err != nil {
