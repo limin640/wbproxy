@@ -1,5 +1,5 @@
 {
-  "build_command": "",
-  "output_dir": "",
-  "dockerfile": "Dockerfile"
+ "go_version": "1.23",
+ "build_command": "go build -o wbproxy .",
+ "start_command": "./wbproxy -listen 0.0.0.0:8080"
 }
