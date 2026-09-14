@@ -486,6 +486,41 @@ func main() {
 		log.Fatalf("读取登录态失败: %v（先在 WorkBuddy AI 桌面端登录一次）", err)
 	}
 
+	// 上游连通性探测：依次试候选（UPSTREAMS 环境变量逗号分隔 > wb-upstream flag > 默认两个），
+	// 选第一个在 8 秒内返回 HTTP 响应的；避免部署机到某个入口线路挂起
+	cands := []string{}
+	if s := os.Getenv("UPSTREAMS"); s != "" {
+		cands = append(cands, strings.Split(s, ",")...)
+	}
+	if upstream != "" {
+		cands = append(cands, upstream)
+	}
+	cands = append(cands, "https://www.workbuddy.ai", "https://copilot.tencent.com")
+	probeBody := `{"model":"deepseek-v4.1-flash","messages":[{"role":"system","content":"hi"},{"role":"user","content":"hi"}],"stream":true}`
+	for _, c := range cands {
+		c = strings.TrimRight(strings.TrimSpace(c), "/")
+		if c == "" {
+			continue
+		}
+		pStart := time.Now()
+		preq, _ := http.NewRequest("POST", c+"/v2/chat/completions", strings.NewReader(probeBody))
+		mu.Lock()
+		preq.Header.Set("Authorization", "Bearer "+token)
+		mu.Unlock()
+		preq.Header.Set("Content-Type", "application/json")
+		pClient := &http.Client{Timeout: 8 * time.Second}
+		presp, err := pClient.Do(preq)
+		if err != nil {
+			log.Printf("上游候选 %s 不可用: %v", c, err)
+			continue
+		}
+		io.Copy(io.Discard, presp.Body)
+		presp.Body.Close()
+		upstream = c
+		log.Printf("上游选定 %s（探测 %s，HTTP %d）", c, time.Since(pStart).Round(time.Millisecond), presp.StatusCode)
+		break
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/chat/completions", chatHandler)
 	mux.HandleFunc("/v1/models", modelsHandler)
