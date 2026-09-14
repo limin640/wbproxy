@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -46,7 +47,18 @@ var (
 	uid        string
 	domain     string
 	expireAt   int64 // ms 时间戳
-	httpClient = &http.Client{Timeout: 10 * time.Minute}
+	httpClient = &http.Client{
+		Timeout: 10 * time.Minute,
+		// 容器里 IPv6/异常 DNS 会导致 TCP 挂起：强制 IPv4、连接超时 10 秒
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout:   10 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			ForceAttemptHTTP2: true,
+			MaxIdleConns:      20,
+		},
+	}
 )
 
 func loadAuth() error {
