@@ -440,9 +440,8 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ── main ─────────────────────────────────────────────────────────────
-
 func main() {
+	flag.StringVar(&gateKey, "key", os.Getenv("GATE_KEY"), "API 门禁密钥（-key 或 GATE_KEY 环境变量；为空则不鉴权，仅建议本机使用）")
 	defaultAuth := os.Getenv("HOME") + "/Library/Application Support/CodeBuddyExtension/Data/Public/auth/workbuddy-desktop-ai.info"
 	flag.StringVar(&authPath, "auth", defaultAuth, "登录态 auth info 文件路径")
 	flag.StringVar(&upstream, "upstream", "https://www.workbuddy.ai", "上游地址")
