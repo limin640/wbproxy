@@ -429,6 +429,36 @@ func modelsHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"object": "list", "data": data})
 }
 
+// debugHandler: 从容器内探测上游连通性，部署排障用
+func debugHandler(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	body := `{"model":"deepseek-v4.1-flash","messages":[{"role":"system","content":"hi"},{"role":"user","content":"hi"}],"stream":true}`
+	req, err := http.NewRequest("POST", upstream+"/v2/chat/completions", strings.NewReader(body))
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]any{"error": err.Error()})
+		return
+	}
+	mu.Lock()
+	tk := token
+	mu.Unlock()
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+tk)
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]any{"error": err.Error(), "elapsed": time.Since(start).String()})
+		return
+	}
+	defer resp.Body.Close()
+	buf := make([]byte, 512)
+	n, _ := io.ReadFull(resp.Body, buf)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"status":   resp.Status,
+		"elapsed":  time.Since(start).String(),
+		"bodyHead": string(buf[:min(n, 200)]),
+	})
+}
+
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
 	exp := expireAt
@@ -440,6 +470,8 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 		"now":      time.Now().Format(time.RFC3339),
 	})
 }
+
+// ── main ─────────────────────────────────────────────────────────────
 
 func main() {
 	// zbpack 的 /bin/server 占用了 -key/-listen 等常见 flag 名，这里用带前缀的名字避免冲突
@@ -458,6 +490,7 @@ func main() {
 	mux.HandleFunc("/v1/chat/completions", chatHandler)
 	mux.HandleFunc("/v1/models", modelsHandler)
 	mux.HandleFunc("/health", healthHandler)
+	mux.HandleFunc("/debug/upstream", debugHandler)
 
 	srv := &http.Server{
 		Addr:         listenAddr,
